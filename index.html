@@ -64,8 +64,10 @@ const Icons = (() => {
     Trash2: mk([P("M3 6h18"), P("M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"), P("M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"), L(10,11,10,17), L(14,11,14,17)]),
     Flag: mk([P("M4 22V4"), P("M4 4h13l-2 4 2 4H4")]),
     Upload: mk([P("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"), P("M17 8l-5-5-5 5"), L(12,3,12,15)]),
-    Boxes: mk([P("M2.97 12.92 12 18l9.03-5.08"), P("M2.97 12.92V6.08L12 1l9.03 5.08v6.84"), P("M12 22V18"), P("M12 11l9.03-5.08"), P("M12 11 2.97 5.92"), P("M12 11v7")]),
-    ClipboardList: mk([R(8,2,8,4,1), R(4,4,16,18,2), L(9,11,15,11), L(9,15,15,15), L(9,19,12,19)]),
+    // Kit: a clean isometric cube (three visible faces meeting at the front edge).
+    Boxes: mk([P("M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"), P("M3.3 7 12 12l8.7-5"), P("M12 22V12")]),
+    // Trips: a clipboard whose clip sits on top of the board, with two bulleted lines.
+    ClipboardList: mk([R(8,2,8,4,1), P("M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"), P("M12 11h4"), P("M12 16h4"), P("M8 11h.01"), P("M8 16h.01")]),
     AlertTriangle: mk([P("M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"), L(12,9,12,13), L(12,17,12.01,17)]),
     Copy: mk([R(9,9,13,13,2), P("M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1")]),
     Play: mk([P("M5 3l16 9-16 9V3z")]),
@@ -131,6 +133,8 @@ const CSS = `
   box-shadow:inset 0 1px 0 #fff,0 8px 28px rgba(150,185,255,.38)}
 .btn-danger{color:#fff;background:linear-gradient(180deg,#FF7A86,#E63E50);border-color:rgba(255,170,180,.7);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 26px rgba(255,93,108,.38)}
+.btn-ok{color:#03150B;background:linear-gradient(180deg,#6DF0B4,#1FB878);border-color:rgba(190,255,225,.8);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 8px 26px rgba(61,229,154,.4)}
 .btn[disabled]{opacity:.4;cursor:not-allowed;box-shadow:none}
 .iconbtn{width:42px;height:42px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;padding:0;
   background:linear-gradient(140deg,rgba(255,255,255,.16),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.34)}
@@ -171,7 +175,7 @@ select.field option,select.field optgroup{background:#151A30;color:#F2F5FF}
 /* ------------------------------------------------------------------ */
 /*  Data helpers                                                       */
 /* ------------------------------------------------------------------ */
-const STOCK = 60; // codes in the sticker pack
+const STOCK = 60; // codes in the QR pack
 const codeOf = (n) => `CM-${String(n).padStart(4, "0")}`;
 const ALL_CODES = Array.from({ length: STOCK }, (_, i) => codeOf(i + 1));
 
@@ -757,7 +761,7 @@ function Scanner({ title, hint, onScan, onClose, sims = [], closeOnOk = false, p
 
         <div className="px-5 mt-5">
           <div className="flex items-center gap-2 mut" style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-            <Keyboard size={15} /> Sticker damaged? Type the code
+            <Keyboard size={15} /> QR damaged? Type the code
           </div>
           <div className="flex gap-2">
             <input className="field" placeholder="e.g. 0003" value={manual} onChange={(e) => setManual(e.target.value)}
@@ -771,7 +775,7 @@ function Scanner({ title, hint, onScan, onClose, sims = [], closeOnOk = false, p
 }
 
 /* ------------------------------------------------------------------ */
-/*  Checklist scanning: one live view that reads either a QR sticker   */
+/*  Checklist scanning: one live view that reads either a QR code      */
 /*  or a bag tag barcode, camera on top, the list itself underneath.   */
 /* ------------------------------------------------------------------ */
 async function detectQR(canvasOrImg) {
@@ -787,7 +791,7 @@ async function detectQR(canvasOrImg) {
   }
 }
 
-function SplitScanner({ title, progress, onScan, onClose, untaggedNames = [], children }) {
+function SplitScanner({ title, progress, onScan, onClose, untaggedNames = [], allDone = false, total = 0, children }) {
   const videoRef = useRef(null);
   const [cam, setCam] = useState(false);
   const [fb, setFb] = useState(null);
@@ -809,7 +813,10 @@ function SplitScanner({ title, progress, onScan, onClose, untaggedNames = [], ch
 
   // Tries a QR code first, then a bag tag barcode, on the same frame, since either one checks a case off.
   useEffect(() => {
-    let stream, timer, stopped = false, working = false, last = "", hits = 0;
+    // held: the code most recently accepted, and when the camera last saw it. While that same code stays in
+    // view (or within a moment of it leaving), it's ignored, so the case you've just scanned doesn't instantly
+    // come back as "already scanned" before you've had a chance to move on to the next one.
+    let stream, timer, stopped = false, working = false, last = "", hits = 0, held = { val: "", seen: 0 };
     (async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) return;
@@ -841,10 +848,12 @@ function SplitScanner({ title, progress, onScan, onClose, untaggedNames = [], ch
                 const r = await decodeITF(g.data, g.w, g.h, { quick: true });
                 if (r) val = r.value;
               }
+              const nowT = Date.now();
+              if (val && val === held.val && nowT - held.seen < 2500) { held.seen = nowT; val = null; }
               if (val) {
                 hits = val === last ? hits + 1 : 1;
                 last = val;
-                if (hits >= 2) { handleRef.current(val); hits = 0; last = ""; }
+                if (hits >= 2) { handleRef.current(val); held = { val, seen: nowT }; hits = 0; last = ""; }
               }
             } catch (e) { /* try the next frame */ }
             working = false;
@@ -892,9 +901,9 @@ function SplitScanner({ title, progress, onScan, onClose, untaggedNames = [], ch
       <div className="flex items-center justify-between px-5 pt-5 pb-3 relative" style={{ zIndex: 1, flex: "none" }}>
         <div>
           <div className="disp" style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>{title}</div>
-          {progress && <div className="mut" style={{ fontSize: 13, marginTop: 2 }}>{progress}</div>}
+          {progress && <div className="mut" style={{ fontSize: 13, marginTop: 2, ...(allDone ? { color: "#7CF0B8", fontWeight: 700 } : {}) }}>{progress}</div>}
         </div>
-        <button className="btn" onClick={onClose}>Done</button>
+        <button className={`btn ${allDone ? "btn-ok" : ""}`} onClick={onClose}>Done</button>
       </div>
 
       <div className="relative mx-5" style={{ zIndex: 1, flex: "none", aspectRatio: "16 / 10", maxHeight: "38vh", background: "rgba(0,0,0,.55)", borderRadius: 24, overflow: "hidden", border: "1px solid rgba(255,255,255,.18)" }}>
@@ -917,6 +926,13 @@ function SplitScanner({ title, progress, onScan, onClose, untaggedNames = [], ch
         )}
       </div>
 
+      {allDone && (
+        <div role="status" className="glass glass-ok mx-5 mt-3 flex items-center gap-3" style={{ zIndex: 1, flex: "none", borderRadius: 18, padding: "12px 14px" }}>
+          <span aria-hidden="true" style={{ width: 32, height: 32, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(160deg,#6DF0B4,#1FB878)", color: "#03150B", boxShadow: "0 0 18px rgba(61,229,154,.55)" }}><Check size={19} /></span>
+          <div style={{ fontSize: 14, lineHeight: 1.35 }}><b>All {total} cases scanned.</b><br /><span className="mut">Tap Done, then log a checkpoint.</span></div>
+        </div>
+      )}
+
       <div className="px-5 pt-3 flex gap-2" style={{ zIndex: 1, flex: "none" }}>
         <label className="btn flex-1" style={{ cursor: busy ? "wait" : "pointer", opacity: busy ? 0.75 : 1, fontSize: 13.5, padding: "10px 14px" }}>
           <Camera size={16} /> {busy || "Take a photo instead"}
@@ -931,7 +947,7 @@ function SplitScanner({ title, progress, onScan, onClose, untaggedNames = [], ch
         }}>
         {untaggedNames.length > 0 && (
           <div className="glass mb-3" style={{ borderRadius: 16, padding: "10px 13px", fontSize: 12.5, lineHeight: 1.4, color: "#FFE3A0" }}>
-            No tag yet, so scan the QR sticker instead: {untaggedNames.join(", ")}
+            No tag yet, so scan the QR instead: {untaggedNames.join(", ")}
           </div>
         )}
         {children}
@@ -948,7 +964,7 @@ function SplitScanner({ title, progress, onScan, onClose, untaggedNames = [], ch
   );
 }
 
-function LabelCapture({ onDone, onClose }) {
+function LabelCapture({ onDone, onClose, checkTag }) {
   const [step, setStep] = useState("barcode"); // barcode | number | manual | confirm
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
@@ -1065,6 +1081,9 @@ function LabelCapture({ onDone, onClose }) {
   const title = { barcode: "Scan luggage barcode", number: "Photograph the number", manual: "Type the number", confirm: "Check the number" }[step];
   const goto = (s) => { setMsg(""); setStep(s); };
   const digits = (result?.number || "").replace(/\D/g, "");
+  // checkTag returns a message when this number is already in use, so the same tag can't end up on two cases.
+  const dupMsg = result && checkTag && digits.length >= 6 ? checkTag(digits) : null;
+  const manualDup = checkTag && manual.length >= 6 ? checkTag(manual) : null;
   const warns = [];
   if (result) {
     if (result.kind === "text") warns.push("Read from the label text, so check every digit against the tag.");
@@ -1117,12 +1136,13 @@ function LabelCapture({ onDone, onClose }) {
             <label className="lbl" style={{ marginTop: 4 }} htmlFor="mn">Luggage number</label>
             <input id="mn" autoFocus inputMode="numeric" className="field disp" style={{ fontSize: 24, fontWeight: 700 }} placeholder="e.g. 0125442817" value={manual}
               onChange={(e) => setManual(e.target.value.replace(/\D/g, "").slice(0, 12))} />
+            {manualDup && <div role="alert" className="flex gap-2" style={{ marginTop: 10, fontSize: 14, lineHeight: 1.45, fontWeight: 600, color: "#FFB3BA" }}><AlertTriangle size={16} style={{ flex: "none", marginTop: 2 }} />{manualDup}</div>}
           </div>
         )}
 
         {step === "confirm" && result && (
           <div className="px-5 mt-1">
-            <div className={`glass ${warns.length ? "" : "glass-ok"}`} style={{ borderRadius: 26, padding: 18 }}>
+            <div className={`glass ${dupMsg ? "glass-bad" : warns.length ? "" : "glass-ok"}`} style={{ borderRadius: 26, padding: 18 }}>
               <div className="mut" style={{ fontSize: 13, fontWeight: 600 }}>Luggage number</div>
               <input aria-label="Luggage number" inputMode="numeric" className="field disp" style={{ marginTop: 8, fontSize: 30, fontWeight: 700, textAlign: "center" }}
                 value={result.number} onChange={(e) => setResult((r) => ({ ...r, number: e.target.value.replace(/\D/g, "").slice(0, 12) }))} />
@@ -1134,6 +1154,7 @@ function LabelCapture({ onDone, onClose }) {
                   ))}
                 </ul>
               )}
+              {dupMsg && <div role="alert" className="flex gap-2" style={{ marginTop: 10, fontSize: 14, lineHeight: 1.45, fontWeight: 600, color: "#FFB3BA" }}><AlertTriangle size={16} style={{ flex: "none", marginTop: 2 }} />{dupMsg}</div>}
             </div>
           </div>
         )}
@@ -1157,23 +1178,28 @@ function LabelCapture({ onDone, onClose }) {
           )}
           {step === "manual" && (
             <>
-              <button className="btn btn-primary w-full" disabled={manual.length < 6} onClick={() => onDone(manual)}><Check size={18} /> Use this number</button>
+              <button className="btn btn-primary w-full" disabled={manual.length < 6 || !!manualDup} onClick={() => onDone(manual)}><Check size={18} /> Use this number</button>
               <button className="btn w-full" onClick={() => goto("barcode")}>Back to barcode scan</button>
             </>
           )}
-          {step === "confirm" && (
+          {step === "confirm" && (dupMsg ? (
+            <>
+              <button className="btn btn-primary w-full" onClick={() => { setResult(null); goto("barcode"); }}><ScanLine size={18} /> Try again</button>
+              <button className="btn w-full" onClick={onClose}>Cancel</button>
+            </>
+          ) : (
             <>
               <button className="btn btn-primary w-full" disabled={digits.length < 6} onClick={() => onDone(digits)}><Check size={18} /> Use this number</button>
               <button className="btn w-full" onClick={() => { setResult(null); goto("barcode"); }}>Scan again</button>
             </>
-          )}
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-function CaseForm({ initial, dest, cases, freeCodes, customTypes, onAddType, customColors, onAddColor, onCreated, onLiveUpdate, onToggleAlsoMine, onDiscard, onClose }) {
+function CaseForm({ initial, dest, cases, freeCodes, customTypes, onAddType, customColors, onAddColor, onCreated, onLiveUpdate, onToggleAlsoMine, onDiscard, onClose, findTagOwner }) {
   const editing = !!initial;
   const [code, setCode] = useState(initial?.code || "");
   const [name, setName] = useState(initial?.name || "");
@@ -1234,7 +1260,7 @@ function CaseForm({ initial, dest, cases, freeCodes, customTypes, onAddType, cus
     try { const p = await fileToJpeg(f); setPhotos((ps) => [...ps, p]); } catch (err) { /* ignore unreadable image */ }
   };
 
-  const onStickerScan = (c) => {
+  const onQrScan = (c) => {
     const existing = cases[c];
     if (existing) return { kind: "bad", text: `${c} is already on "${existing.name}"` };
     setCode(c);
@@ -1250,14 +1276,20 @@ function CaseForm({ initial, dest, cases, freeCodes, customTypes, onAddType, cus
     onLiveUpdate(code, { name: name.trim(), type, color, contents: contents.trim(), tagHistory, carnet: carnet.trim(), photos });
   }, [code, name, type, color, contents, tagHistory, carnet, photos]);
 
-  const simCodes = freeCodes.slice(0, 4).map((c) => ({ code: c, text: "Unused sticker from your pack" }));
+  const checkTag = (n) => {
+    if (n === currentTag) return "That's already this case's tag. Try again?";
+    const other = findTagOwner(n, code);
+    return other ? `It looks like you've already scanned this tag for "${other.name || other.code}". A tag can only be on one case, or checklist mode can't tell them apart. Try again?` : null;
+  };
+
+  const simCodes = freeCodes.slice(0, 4).map((c) => ({ code: c, text: "Unused QR from your pack" }));
   const canFinish = code && name.trim();
 
   return (
     <>
       <Sheet title={editing ? "Edit case" : dest?.kind === "kit" ? "Add to My Kit" : dest?.kind === "folder" ? "Add to folder" : "Add luggage"} onClose={onClose}>
         {!editing && <div className="mut" style={{ fontSize: 13, marginTop: 6 }}>Adding to {dest?.kind === "trip" || dest?.kind === "folder" ? dest.name : "My Kit"}</div>}
-        <label className="lbl">Sticker</label>
+        <label className="lbl">QR code</label>
         {code ? (
           <div className="flex items-center gap-3">
             <Plate code={code} status="ok" size="lg" />
@@ -1265,7 +1297,7 @@ function CaseForm({ initial, dest, cases, freeCodes, customTypes, onAddType, cus
           </div>
         ) : (
           <button className="btn btn-primary w-full" onClick={() => setScanning(true)}>
-            <ScanLine size={20} /> Scan sticker on case
+            <ScanLine size={20} /> Scan QR on case
           </button>
         )}
 
@@ -1381,7 +1413,7 @@ function CaseForm({ initial, dest, cases, freeCodes, customTypes, onAddType, cus
         <button className="btn btn-primary w-full mt-7" disabled={!canFinish} onClick={onClose}>
           <Check size={20} /> Done
         </button>
-        {!canFinish && <div className="mut" style={{ fontSize: 13, marginTop: 10, textAlign: "center" }}>{!code ? "Scan a sticker to link this case." : "Give the case a name to finish."}</div>}
+        {!canFinish && <div className="mut" style={{ fontSize: 13, marginTop: 10, textAlign: "center" }}>{!code ? "Scan a QR to link this case." : "Give the case a name to finish."}</div>}
 
         {!editing && code && (
           confirmingDiscard ? (
@@ -1395,9 +1427,9 @@ function CaseForm({ initial, dest, cases, freeCodes, customTypes, onAddType, cus
         )}
       </Sheet>
       {scanning && (
-        <Scanner title="Scan sticker" hint="Point at the QR sticker on the case. Its code is saved to this case." onScan={onStickerScan} onClose={() => setScanning(false)} sims={simCodes} closeOnOk />
+        <Scanner title="Scan QR" hint="Point at the QR on the case. Its code is saved to this case." onScan={onQrScan} onClose={() => setScanning(false)} sims={simCodes} closeOnOk />
       )}
-      {capturing && <LabelCapture onClose={() => setCapturing(false)} onDone={(n) => { setTagHistory((h) => [...h, { number: n, at: now(), checkpoint: null }]); setCapturing(false); }} />}
+      {capturing && <LabelCapture checkTag={checkTag} onClose={() => setCapturing(false)} onDone={(n) => { setTagHistory((h) => [...h, { number: n, at: now(), checkpoint: null }]); setCapturing(false); }} />}
     </>
   );
 }
@@ -1495,6 +1527,12 @@ function Checkmate() {
   const freeCodes = ALL_CODES.filter((c) => !cases[c]);
   const mineCodes = folders.find((f) => f.id === "mine").codes;
   const isMine = (code) => mineCodes.includes(code);
+  // A bag tag can only belong to one case at a time: checklist mode finds a case by its tag number, so two
+  // cases sharing one would leave it unable to tell which to tick off. Returns the other case holding it, if any.
+  const tagOwner = (num, exceptCode) => {
+    const d = String(num || "").replace(/\D/g, "");
+    return d ? Object.values(cases).find((c) => c.code !== exceptCode && tagOf(c)?.number === d) || null : null;
+  };
   const missingOf = (t) => t.caseCodes.filter((c) => !t.scanned.includes(c));
   const statusOf = (t, c) => (t.scanned.includes(c) ? "ok" : t.flagged ? "missing" : "pending");
 
@@ -1515,7 +1553,7 @@ function Checkmate() {
   const addToFolder = (fid, code) =>
     setFolders((fs) => fs.map((f) => (f.id === fid && !f.codes.includes(code) ? { ...f, codes: [...f.codes, code] } : f)));
 
-  // A case exists the instant its sticker is scanned, in whatever destination the person chose, so
+  // A case exists the instant its QR is scanned, in whatever destination the person chose, so
   // nothing is lost even if the sheet is closed straight away without filling in anything else.
   const onCaseCreated = (code, dest) => {
     setCases((cs) => ({ ...cs, [code]: { code, name: "", type: "Peli 1510", color: "Black", contents: "", tagHistory: [], carnet: "", photos: [] } }));
@@ -1564,7 +1602,7 @@ function Checkmate() {
     say("Folder deleted. The cases are still in your kit.");
   };
 
-  // Reusing kit that isn't in My Kit: the sticker must be scanned again, because kit houses often supply a different physical case.
+  // Reusing kit that isn't in My Kit: the QR must be scanned again, because kit houses often supply a different physical case.
   const reuseScan = (tmpl, code, tid) => {
     const t = trips.find((x) => x.id === tid);
     if (code === tmpl.code) {
@@ -1573,7 +1611,7 @@ function Checkmate() {
       return { kind: "ok", text: "Same case as last time. Added to the trip." };
     }
     const existing = cases[code];
-    if (existing) return { kind: "bad", text: `${code} is already on "${existing.name}". Scan the sticker on the case you're packing.` };
+    if (existing) return { kind: "bad", text: `${code} is already on "${existing.name}". Scan the QR on the case you're packing.` };
     setCases((cs) => ({ ...cs, [code]: { ...tmpl, code, tagHistory: [], photos: [] } }));
     updateTrip(tid, (x) => ({ ...x, caseCodes: [...x.caseCodes, code] }));
     return { kind: "ok", text: `New case ${code} linked. Contents copied from last time.` };
@@ -1633,7 +1671,7 @@ function Checkmate() {
     return { kind: "ok", text: `${c.name} scanned. ${left === 0 ? "That's every case." : `${left} to go.`}` };
   };
 
-  // Checking a case off by its current bag tag rather than its QR sticker, for cases that don't have a sticker yet.
+  // Checking a case off by its current bag tag rather than its QR code.
   const scanTagInTrip = (digits) => {
     const t = trips.find((x) => x.id === tripId);
     const holder = t.caseCodes.find((code) => tagOf(cases[code])?.number === digits);
@@ -1647,7 +1685,7 @@ function Checkmate() {
     return { kind: "ok", text: `${cases[holder].name} scanned. ${left === 0 ? "That's every case." : `${left} to go.`}` };
   };
 
-  // Either a QR sticker or a bag tag barcode checks a case off, since both point at the same case.
+  // Either a QR code or a bag tag barcode checks a case off, since both point at the same case.
   const scanEitherInTrip = (raw) => {
     const asQR = parseCode(raw);
     if (asQR) return scanInTrip(asQR);
@@ -1688,7 +1726,7 @@ function Checkmate() {
   };
 
   // Reusing a whole past trip goes through the same route as reusing individual kit: cases in My Kit go
-  // straight in after a contents check, everything else needs its sticker rescanned, since this pulls from
+  // straight in after a contents check, everything else needs its QR rescanned, since this pulls from
   // that trip's frozen record rather than assuming today's live case still matches it.
   // Deleting a trip never touches the cases on it: they stay exactly where they already live, in My Kit
   // or any folder. Only the trip itself, its checklist progress and any checkpoints logged are lost.
@@ -1747,7 +1785,7 @@ function Checkmate() {
       return (
         <Sheet title="Add luggage" onClose={() => setSheet(null)}>
           <button className="btn btn-primary w-full mt-5" onClick={() => setSheet({ kind: "caseForm", dest: { kind: "trip", id: trip.id, name: trip.name } })}>
-            <ScanLine size={20} /> New case: scan a sticker
+            <ScanLine size={20} /> New case: scan a QR
           </button>
           <button className="btn w-full mt-3" onClick={() => setSheet({ kind: "pick" })}>
             <Boxes size={20} /> Choose from My Kit or previous trips
@@ -1762,7 +1800,7 @@ function Checkmate() {
       onClose={(summary) => { setSheet(null); if (summary) say(summary); }} />;
 
     if (sheet.kind === "confirmContents") return <ConfirmContentsSheet queue={sheet.queue.map((c) => cases[c]).filter(Boolean)} tripId={sheet.tripId}
-      onSaveContents={updateContents} onUpdateTag={updateTagAtReuse} onDone={(codes) => finishConfirm(sheet.tripId, codes, sheet.then)} onClose={() => setSheet(null)} />;
+      onSaveContents={updateContents} onUpdateTag={updateTagAtReuse} findTagOwner={tagOwner} onDone={(codes) => finishConfirm(sheet.tripId, codes, sheet.then)} onClose={() => setSheet(null)} />;
 
     if (sheet.kind === "destination")
       return (
@@ -1847,7 +1885,7 @@ function Checkmate() {
       return <CaseForm initial={sheet.initial} dest={sheet.dest} cases={cases} freeCodes={freeCodes} customTypes={customTypes} onAddType={addType}
         customColors={customColors} onAddColor={addColor} onClose={() => setSheet(null)}
         onCreated={(code, dest) => onCaseCreated(code, dest)} onLiveUpdate={onCaseLiveUpdate}
-        onToggleAlsoMine={onToggleAlsoMine} onDiscard={(code) => onDiscardCase(code)} />;
+        onToggleAlsoMine={onToggleAlsoMine} onDiscard={(code) => onDiscardCase(code)} findTagOwner={tagOwner} />;
 
     if (sheet.kind === "backup") {
       const text = backupText();
@@ -1970,33 +2008,38 @@ function Checkmate() {
       if (!t) return null;
       const untagged = t.caseCodes.filter((c) => cases[c] && !tagOf(cases[c])?.number);
       return (
-        <Sheet title="Some cases have no tag" onClose={() => setSheet(null)}>
-          <p className="mut" style={{ fontSize: 13.5, marginTop: 6, lineHeight: 1.45 }}>
-            That's fine if you're not through check-in yet, since QR codes work either way. If you are, it's worth adding these now.
-          </p>
-          <div className="glass mt-4" style={{ borderRadius: 20, padding: 12 }}>
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {untagged.map((c) => (
-                <li key={c} className="flex items-center gap-2" style={{ padding: "6px 0", fontSize: 14 }}>
-                  <AlertTriangle size={15} color={AMBER} style={{ flex: "none" }} />
-                  <span className="truncate">{cases[c].name}</span>
-                </li>
-              ))}
-            </ul>
+        <Sheet title="Not every case has a bag tag" onClose={() => setSheet(null)}>
+          <div className="glass glass-bad flex gap-3 mt-4" style={{ borderRadius: 20, padding: "12px 14px" }}>
+            <AlertTriangle size={20} color={AMBER} style={{ flex: "none", marginTop: 1 }} />
+            <div style={{ fontSize: 14, lineHeight: 1.45 }}>
+              <b>{untagged.length} of {t.caseCodes.length} {t.caseCodes.length === 1 ? "case has" : "cases have"} no bag tag yet.</b> These can only be checked off by their QR. If you're through check-in, add the tags before you start.
+            </div>
           </div>
-          <button className="btn btn-primary w-full mt-5" onClick={() => { updateTrip(t.id, (x) => ({ ...x, mode: "check" })); setSheet(null); }}>
-            <Check size={18} /> Continue to checklist
+          <div className="mut" style={{ fontSize: 13, fontWeight: 600, marginTop: 16, marginBottom: 8 }}>Tap a case to add its tag</div>
+          <div className="flex flex-col gap-2">
+            {untagged.map((c) => (
+              <button key={c} className="glass flex items-center gap-3 text-left w-full" style={{ borderRadius: 18, padding: "10px 14px" }}
+                onClick={() => setSheet({ kind: "caseForm", initial: cases[c], dest: { kind: "edit" } })}>
+                <span className="disp" style={{ fontSize: 14, fontWeight: 600, color: "#8FF5FF", flex: "none" }}>{c}</span>
+                <span className="truncate" style={{ flex: 1, fontSize: 14.5, fontWeight: 600 }}>{cases[c].name || "Unnamed case"}</span>
+                <span className="mut flex items-center" style={{ fontSize: 13, flex: "none" }}>Add tag <ChevronRight size={16} /></span>
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-primary w-full mt-5" onClick={() => setSheet(null)}>Go back and add tags</button>
+          <button className="btn w-full mt-3" onClick={() => { updateTrip(t.id, (x) => ({ ...x, mode: "check" })); setSheet(null); }}>
+            Start anyway, QR only for these
           </button>
-          <button className="btn w-full mt-3" onClick={() => setSheet(null)}>Go back and add tags</button>
         </Sheet>
       );
     }
 
     if (sheet.kind === "splitScan") {
       const untaggedNames = trip.caseCodes.filter((c) => !trip.scanned.includes(c) && !tagOf(cases[c])?.number).map((c) => cases[c].name);
+      const allScanned = trip.caseCodes.length > 0 && trip.scanned.length === trip.caseCodes.length;
       return (
-        <SplitScanner title="Scan QR / Bag Tag" progress={`${trip.scanned.length} of ${trip.caseCodes.length} scanned`}
-          onScan={scanEitherInTrip} onClose={() => setSheet(null)} untaggedNames={untaggedNames}>
+        <SplitScanner title="Scan QR / Bag Tag" progress={allScanned ? `All ${trip.caseCodes.length} scanned` : `${trip.scanned.length} of ${trip.caseCodes.length} scanned`}
+          onScan={scanEitherInTrip} onClose={() => setSheet(null)} untaggedNames={untaggedNames} allDone={allScanned} total={trip.caseCodes.length}>
           <div className="flex flex-col gap-3">
             {trip.caseCodes.map((c) => (
               <CaseRow key={c} c={cases[c]} status={statusOf(trip, c)}
@@ -2140,10 +2183,16 @@ function Checkmate() {
               {cpList}
               <div className="fixed left-0 right-0 z-30 pointer-events-none" style={{ bottom: 92 }}>
                 <div className="mx-auto max-w-md px-4">
-                  <button className="btn btn-primary w-full pointer-events-auto" style={{ minHeight: 50, fontSize: 15, boxShadow: "0 10px 28px rgba(0,0,0,.35)" }}
-                    onClick={() => setSheet({ kind: "splitScan" })}>
-                    <ScanLine size={20} /> Scan QR / Bag Tag
-                  </button>
+                  {allDone ? (
+                    <button className="btn btn-ok w-full pointer-events-auto" style={{ minHeight: 50, fontSize: 15 }} onClick={openCheckpoint}>
+                      <Check size={20} /> All {total} scanned. Log checkpoint
+                    </button>
+                  ) : (
+                    <button className="btn btn-primary w-full pointer-events-auto" style={{ minHeight: 50, fontSize: 15, boxShadow: "0 10px 28px rgba(0,0,0,.35)" }}
+                      onClick={() => setSheet({ kind: "splitScan" })}>
+                      <ScanLine size={20} /> Scan QR / Bag Tag
+                    </button>
+                  )}
                 </div>
               </div>
             </>
@@ -2259,7 +2308,7 @@ function Checkmate() {
                   onClick={() => setSheet({ kind: "backup" })}><Copy size={15} /></button>
               </div>
               <div className="mut" style={{ fontSize: 13.5, marginTop: 8 }}>
-                {tab === "trips" ? "Scan it out. Scan it in." : `${mineCodes.length} cases in My Kit, ${freeCodes.length} stickers unused`}
+                {tab === "trips" ? "Scan it out. Scan it in." : `${mineCodes.length} cases in My Kit, ${freeCodes.length} QR codes unused`}
               </div>
             </div>
             <main className="flex-1" style={{ paddingBottom: 110 }}>{tab === "trips" ? TripsList() : (
@@ -2347,7 +2396,7 @@ function PickSheet({ trip, trips, cases, folders, onAdd, onClose }) {
   );
 }
 
-function ConfirmContentsSheet({ queue, tripId, onSaveContents, onUpdateTag, onDone, onClose }) {
+function ConfirmContentsSheet({ queue, tripId, onSaveContents, onUpdateTag, onDone, onClose, findTagOwner }) {
   const [idx, setIdx] = useState(0);
   const [text, setText] = useState(queue[0]?.contents || "");
   const [added, setAdded] = useState([]);
@@ -2355,6 +2404,11 @@ function ConfirmContentsSheet({ queue, tripId, onSaveContents, onUpdateTag, onDo
   const cur = queue[idx];
   if (!cur) return null;
   const curTag = tagOf(cur)?.number;
+  const checkTag = (n) => {
+    if (n === curTag) return "That's already this case's tag. Try again?";
+    const other = findTagOwner(n, cur.code);
+    return other ? `It looks like you've already scanned this tag for "${other.name || other.code}". A tag can only be on one case, or checklist mode can't tell them apart. Try again?` : null;
+  };
 
   const next = (code) => {
     const acc = code ? [...added, code] : added;
@@ -2400,7 +2454,7 @@ function ConfirmContentsSheet({ queue, tripId, onSaveContents, onUpdateTag, onDo
         </div>
         <button className="btn w-full mt-3" onClick={() => next()}>Skip, don't add this one</button>
       </Sheet>
-      {capturing && <LabelCapture onClose={() => setCapturing(false)} onDone={(n) => { onUpdateTag(cur.code, { number: n }); setCapturing(false); }} />}
+      {capturing && <LabelCapture checkTag={checkTag} onClose={() => setCapturing(false)} onDone={(n) => { onUpdateTag(cur.code, { number: n }); setCapturing(false); }} />}
     </>
   );
 }
@@ -2421,7 +2475,7 @@ function ReuseSheet({ queue, tripId, freeCodes, onScan, onClose }) {
     } else setIdx(idx + 1);
   };
 
-  const sims = cur ? [{ code: cur.code, text: "Same case as last time" }, ...freeCodes.slice(0, 2).map((c) => ({ code: c, text: "A different case, unused sticker" }))] : [];
+  const sims = cur ? [{ code: cur.code, text: "Same case as last time" }, ...freeCodes.slice(0, 2).map((c) => ({ code: c, text: "A different case, unused QR" }))] : [];
   if (!cur) return null;
   return (
     <>
@@ -2429,7 +2483,7 @@ function ReuseSheet({ queue, tripId, freeCodes, onScan, onClose }) {
         <div className="glass flex gap-3 mt-5" style={{ borderRadius: 22, padding: 14 }}>
           <AlertTriangle size={20} color={AMBER} style={{ flex: "none", marginTop: 1 }} />
           <div style={{ fontSize: 14.5, lineHeight: 1.5 }}>
-            Kit houses and kit rooms often hold several identical kits. This might not be the same physical case as last time, so scan the sticker on the case you're actually packing.
+            Kit houses and kit rooms often hold several identical kits. This might not be the same physical case as last time, so scan the QR on the case you're actually packing.
           </div>
         </div>
         <div className="mut" style={{ fontSize: 13, fontWeight: 600, marginTop: 16 }}>Case {idx + 1} of {queue.length}</div>
@@ -2443,14 +2497,14 @@ function ReuseSheet({ queue, tripId, freeCodes, onScan, onClose }) {
         <p className="mut" style={{ fontSize: 13, marginTop: 12, lineHeight: 1.45 }}>
           The name, contents and carnet details are copied across. The bag tag number and photos are left blank, because they belong to a specific case and journey.
         </p>
-        <button className="btn btn-primary w-full mt-5" onClick={() => setScanning(true)}><ScanLine size={20} /> Scan QR sticker</button>
+        <button className="btn btn-primary w-full mt-5" onClick={() => setScanning(true)}><ScanLine size={20} /> Scan QR</button>
         <div className="flex gap-3 mt-3">
           {queue.length > 1 && <button className="btn flex-1" onClick={() => advance("skipped")}>Skip this one</button>}
           <button className="btn flex-1" onClick={() => onClose()}>{queue.length > 1 ? "Stop here" : "Cancel"}</button>
         </div>
       </Sheet>
       {scanning && (
-        <Scanner title="Rescan QR code" hint={`Scan the sticker on ${cur.name}. If it's the same code as last time, it's confirmed as the same case.`}
+        <Scanner title="Rescan QR code" hint={`Scan the QR on ${cur.name}. If it's the same code as last time, it's confirmed as the same case.`}
           onScan={(c) => { const r = onScan(cur, c, tripId); if (r.kind === "ok") scanned.current = true; return r; }}
           onClose={() => { setScanning(false); if (scanned.current) { scanned.current = false; advance("done"); } }} sims={sims} closeOnOk progress={`Case ${idx + 1} of ${queue.length}`} />
       )}
